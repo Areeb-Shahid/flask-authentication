@@ -36,8 +36,8 @@ with app.app_context():
 
 @app.route('/')
 def home():
-    return render_template("index.html")
-
+    # Passing True or False if the user is authenticated.
+    return render_template("index.html", logged_in=current_user.is_authenticated)
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -47,6 +47,7 @@ def register():
         password = request.form['password']
 
         existing_user = User.query.filter_by(email=email).first()
+
         if existing_user:
             flash('A user with that email address already exists. Please log in.')
             return redirect(url_for('login'))
@@ -60,30 +61,70 @@ def register():
         db.session.commit()
 
         login_user(new_user)
-        return render_template("secrets.html", name=request.form.get('name'))
+        return render_template("secrets.html")
 
-    return render_template("register.html")
+    return render_template("register.html", logged_in=current_user.is_authenticated)
+
+# by using salting
+#
+# @app.route('/register', methods=["GET", "POST"])
+# def register():
+#     if request.method == "POST":
+#         # Hashing and salting the password entered by the user
+#         hash_and_salted_password = generate_password_hash(
+#             request.form.get('password'),
+#             method='pbkdf2:sha256',
+#             salt_length=8
+#         )
+#         # Storing the hashed password in our database
+#         new_user = User(
+#             email=request.form.get('email'),
+#             name=request.form.get('name'),
+#             password=hash_and_salted_password,
+#         )
+#
+#         db.session.add(new_user)
+#         db.session.commit()
+#
+#         return render_template("secrets.html", name=request.form.get('name'))
+#
+#     return render_template("register.html")
 
 
-@app.route('/login')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    return render_template("login.html")
+    if request.method == 'POST':
+        email = request.form['email']
+        password = request.form['password']
+
+        user = User.query.filter_by(email=email).first()
+
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('secrets'))
+        else:
+            flash('Invalid email or password. Please Try again.')
+
+    return render_template("login.html", logged_in=current_user.is_authenticated)
 
 
 @app.route('/secrets')
+@login_required
 def secrets():
-    user_name = current_user.name
-    return render_template("secrets.html", user_name=user_name)
+    print(current_user.name)
+    return render_template("secrets.html", name=current_user.name, logged_in=True)
 
 
 @app.route('/logout')
 def logout():
-    pass
+    logout_user()
+    return redirect(url_for('home'))
 
 
 @app.route('/download')
 def download():
-    pass
+    file_sheet = 'cheat_sheet.pdf'
+    return send_from_directory('static/files', file_sheet, as_attachment=True)
 
 
 if __name__ == "__main__":
